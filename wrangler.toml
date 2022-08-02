@@ -1,0 +1,20 @@
+name = "cloud-server-test"
+main = "src/index.ts"
+compatibility_date = "2022-07-29"
+
+account_id = "" # ← Replace with your Account ID.
+workers_dev = true
+
+[[r2_buckets]]
+binding = 'DB_BUCKET' # <~ valid JavaScript variable name
+bucket_name = 'testdb'
+preview_bucket_name = 'testdb-preview'
+
+[durable_objects]
+bindings = [
+  { name = "DB_ATOMIC", class_name = "AtomicFileSystemDO" } # Binding to our DurableObjectExample class
+]
+
+[[migrations]]
+tag = "v1" # Should be unique for each entry
+new_classes = ["AtomicFileSystemDO"]
