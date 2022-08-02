@@ -43,7 +43,7 @@ export class AtomicFileSystemDO {
 				console.log("DO: No version in new value");
 			} else if (this.value === undefined || newValue.version == this.value.version) {
 				newValue.version = crypto.randomUUID();
-				console.log(`DO: new value: ${newValue.version}`);
+				log(`DO: new value: ${newValue.version}`);
 
 				this.value = newValue;
 				//await this.state.storage.put("value", this.value);
@@ -122,7 +122,7 @@ class MyFile {
             this.header.version = data.version;
             this.header.blocks = data.blocks;
             this.header.super = data.super;
-            log(`open(${this.filename}): ${data.version} ${JSON.stringify(data)}`);
+            console.log(`open(${this.filename}): ${data.version} ${JSON.stringify(data)}`);
         } else {
             log(`open(${this.filename}): ${response.status}`);
         }
@@ -143,7 +143,7 @@ class MyFile {
         const cache = caches.default;
 
         const cacheKey = new Request(`http://example.com/2/block/${blockId}`);
-
+        console.log(`putCachedBlock(${blockId})`);
         let block = await bucket.put(blockId, data, {
             httpMetadata: new Headers({
                 'content-type': 'application/octet-stream',
@@ -179,6 +179,7 @@ class MyFile {
         let cacheReq = new Request(cacheKey);
         let response = await cache.match(cacheReq);
         if (response) {
+            console.log(`getCachedBlock(${blockId}): cached`);
             return response;
         }
         
@@ -192,9 +193,9 @@ class MyFile {
             blockId = blockId.substring(0, offset);
         }
         
+        console.log(`putCachedBlock(${blockId}): uncached`);
         let block = await bucket.get(blockId, { range: range }) as R2ObjectBody;
         if (block === null) {
-            console.log()
             return new Response('Block Not Found', { status: 404 });
         }
         
@@ -231,6 +232,9 @@ class MyFile {
         let blockId = this.header.blocks[offset >> this.header.blockShift];
         if (blockId == "") {
             blockId = `${this.header.super}/${offset & ~this.header.blockMask}`;
+        }
+        if (blockId === undefined) {
+            return null;
         }
         
         if (blockId != "") {
@@ -298,7 +302,7 @@ class MyFile {
             let blockIndex = parseInt(x[0]);
             let block = x[1];
             const blockId = toHexString(await crypto.subtle.digest('md5', block));
-            log(`flushWrite(${blockIndex}, ${blockId})`);
+            console.log(`flushWrite(${blockIndex}, ${blockId})`);
             this.header.blocks[blockIndex] = blockId;
             await this.putCachedBlock(blockId, block);
             this.cachedBlocks[blockId] = block;
@@ -587,6 +591,27 @@ class MyVfs {
         file.header.blocks.fill("");
        
         await file.atomicCommit();
+    }
+
+    async garbageCollect(filename: string) {
+        const file = new MyFile(filename, this.next_handle++);
+        await file.open();
+        
+        let usedBlocks = new Set(file.header.blocks);
+        usedBlocks.add(filename);
+        let options:R2ListOptions = {};
+        while (true) {
+            let response = await bucket.list(options);
+            
+            let garbage = response.objects.filter(obj => !usedBlocks.has(obj.key));
+            console.log(garbage.map(obj => obj.key));
+
+            context.waitUntil(Promise.all(garbage.map(obj => bucket.delete(obj.key))));
+            if (!response.truncated) {
+                break;
+            }
+            options.cursor = response.cursor;
+        }
     }
 }
 

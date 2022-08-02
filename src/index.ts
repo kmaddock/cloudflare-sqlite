@@ -51,7 +51,7 @@ export default {
 			await db.exec(`PRAGMA journal_mode = MEMORY; -- Required for batch atomic write
 PRAGMA page_size = 16384;
 PRAGMA synchronous = normal; -- synchronise less often to the filesystem
-PRAGMA foreign_keys = on; -- check foreign key reference, slightly worse performance
+--PRAGMA foreign_keys = on; -- check foreign key reference, slightly worse performance
 `);
 
 			try {
@@ -91,13 +91,16 @@ PRAGMA foreign_keys = on; -- check foreign key reference, slightly worse perform
 			while (true) {
 				let response = await env.DB_BUCKET.list();
 				console.log(response.objects.map(obj => obj.key));
-				await Promise.all(response.objects.map(obj => env.DB_BUCKET.delete(obj.key)));
+				ctx.waitUntil(Promise.all(response.objects.map(obj => env.DB_BUCKET.delete(obj.key))));
 				if (response.cursor == null) {
 					break;
 				}
 			}
 			return new Response("wasted the bucket");
 
+		} else if (url.pathname == "/gc") {
+			await vfs.garbageCollect("ROOT");
+			return new Response("garbage collected");
 		}
 		return new Response("Hello World!");
 	},

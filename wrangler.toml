@@ -2,7 +2,6 @@ name = "cloud-server-test"
 main = "src/index.ts"
 compatibility_date = "2022-07-29"
 
-account_id = "" # ← Replace with your Account ID.
 workers_dev = true
 
 [[r2_buckets]]
